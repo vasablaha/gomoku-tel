@@ -20,6 +20,28 @@ app.use(express.json());
 // Store active games
 const games = new Map();
 
+// Store user credits (in production use database)
+const userCredits = new Map();
+const DEFAULT_CREDITS = 100;
+const WIN_REWARD = 10;
+const LOSE_PENALTY = 10;
+
+// Get user credits
+function getCredits(visitorId) {
+  if (!userCredits.has(visitorId)) {
+    userCredits.set(visitorId, DEFAULT_CREDITS);
+  }
+  return userCredits.get(visitorId);
+}
+
+// Update credits after game
+function updateCredits(visitorId, won) {
+  const current = getCredits(visitorId);
+  const newCredits = won ? current + WIN_REWARD : Math.max(0, current - LOSE_PENALTY);
+  userCredits.set(visitorId, newCredits);
+  return newCredits;
+}
+
 const BOARD_SIZE = 15;
 const WIN_LENGTH = 5;
 const TURN_TIMEOUT = 20000; // 20 seconds per turn
@@ -102,10 +124,18 @@ function startTurnTimer(gameId) {
     g.status = 'finished';
     g.winner = winner;
 
+    // Update credits
+    const creditsUpdate = {};
+    g.players.forEach(p => {
+      const won = p.symbol === winner;
+      creditsUpdate[p.visitorId] = updateCredits(p.visitorId, won);
+    });
+
     io.to(gameId).emit('gameOver', {
       winner: winner,
       board: g.board,
-      reason: 'timeout'
+      reason: 'timeout',
+      creditsUpdate
     });
 
     console.log(`Game ${gameId}: ${loser} lost due to timeout`);
@@ -142,6 +172,13 @@ app.post('/api/games', (req, res) => {
   });
 
   res.json({ gameId });
+});
+
+// API endpoint to get user credits
+app.get('/api/credits/:visitorId', (req, res) => {
+  const { visitorId } = req.params;
+  const credits = getCredits(visitorId);
+  res.json({ credits });
 });
 
 // API endpoint to get all waiting lobbies
@@ -303,13 +340,23 @@ io.on('connection', (socket) => {
     if (checkWinner(game.board, row, col, player.symbol)) {
       game.status = 'finished';
       game.winner = player.symbol;
+
+      // Update credits
+      const creditsUpdate = {};
+      game.players.forEach(p => {
+        const won = p.symbol === player.symbol;
+        creditsUpdate[p.visitorId] = updateCredits(p.visitorId, won);
+      });
+
       io.to(gameId).emit('gameOver', {
         winner: player.symbol,
-        board: game.board
+        board: game.board,
+        creditsUpdate
       });
     } else if (checkDraw(game.board)) {
       game.status = 'finished';
       game.winner = 'draw';
+      // No credits change on draw
       io.to(gameId).emit('gameOver', {
         winner: 'draw',
         board: game.board

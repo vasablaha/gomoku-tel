@@ -48,6 +48,7 @@ function App() {
   const [isTelegramReady, setIsTelegramReady] = useState(false);
   const [lobbies, setLobbies] = useState<Lobby[]>([]);
   const [timeLeft, setTimeLeft] = useState<number>(20);
+  const [credits, setCredits] = useState<number>(100);
   const boardRef = useRef<HTMLDivElement>(null);
 
   // Initialize Telegram Mini App
@@ -97,6 +98,29 @@ function App() {
     }
   }, []);
 
+  // Get telegram user ID
+  const getTelegramId = useCallback(() => {
+    try {
+      const user = initData.user();
+      return user?.id || null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // Fetch user credits
+  const fetchCredits = async () => {
+    const visitorId = getTelegramId();
+    if (!visitorId) return;
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/credits/${visitorId}`);
+      const data = await response.json();
+      setCredits(data.credits);
+    } catch (e) {
+      console.log('Could not fetch credits');
+    }
+  };
+
   // Fetch lobbies
   const fetchLobbies = async () => {
     try {
@@ -108,10 +132,11 @@ function App() {
     }
   };
 
-  // Fetch lobbies on mount and every 3 seconds
+  // Fetch lobbies and credits on mount
   useEffect(() => {
     if (!gameId) {
       fetchLobbies();
+      fetchCredits();
       const interval = setInterval(fetchLobbies, 3000);
       return () => clearInterval(interval);
     }
@@ -209,13 +234,25 @@ function App() {
       }));
     });
 
-    socket.on('gameOver', ({ winner, board }: { winner: 'X' | 'O' | 'draw'; board: CellValue[][] }) => {
+    socket.on('gameOver', ({ winner, board, creditsUpdate }: {
+      winner: 'X' | 'O' | 'draw';
+      board: CellValue[][];
+      creditsUpdate?: Record<string, number>;
+    }) => {
       setGameState(prev => ({
         ...prev,
         board,
         status: 'finished',
         winner
       }));
+
+      // Update credits if available
+      if (creditsUpdate) {
+        const visitorId = getTelegramId();
+        if (visitorId && creditsUpdate[visitorId] !== undefined) {
+          setCredits(creditsUpdate[visitorId]);
+        }
+      }
 
       // Haptic feedback for game over
       try {
@@ -300,16 +337,6 @@ function App() {
       console.log('MainButton not available');
     }
   }, [isTelegramReady, gameState.status, socket, gameId]);
-
-  // Get telegram user ID
-  const getTelegramId = () => {
-    try {
-      const user = initData.user();
-      return user?.id || null;
-    } catch {
-      return null;
-    }
-  };
 
   // Create new game
   const createGame = async () => {
@@ -431,7 +458,15 @@ function App() {
   if (!gameId) {
     return (
       <div className="min-h-screen flex flex-col items-center p-4 bg-[var(--tg-theme-bg-color)]">
-        <h1 className="text-3xl font-bold mb-2 mt-4">🎮 Gomoku</h1>
+        {/* Credits display */}
+        <div className="w-full max-w-xs flex justify-end mb-2">
+          <div className="bg-yellow-500/20 border border-yellow-500/30 px-3 py-1 rounded-full flex items-center gap-2">
+            <span className="text-yellow-400">🪙</span>
+            <span className="font-bold text-yellow-400">{credits}</span>
+          </div>
+        </div>
+
+        <h1 className="text-3xl font-bold mb-2">🎮 Gomoku</h1>
         <p className="text-gray-400 mb-4 text-center">Piškvorky 5 v řadě</p>
 
         {/* Lobbies list - PRIMARY */}
@@ -528,8 +563,9 @@ function App() {
               {playerSymbol || '?'}
             </span>
           </div>
-          <div className="text-sm text-gray-400">
-            Hra: <span className="font-mono">{gameId}</span>
+          <div className="bg-yellow-500/20 px-2 py-1 rounded-full flex items-center gap-1">
+            <span className="text-yellow-400 text-xs">🪙</span>
+            <span className="font-bold text-yellow-400 text-sm">{credits}</span>
           </div>
         </div>
       </div>
