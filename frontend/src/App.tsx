@@ -49,7 +49,7 @@ function App() {
 
       // Apply Telegram theme
       if (themeParams.isMounted()) {
-        const bgColor = themeParams.backgroundColor() || '#1a1a1a';
+        const bgColor = themeParams.bgColor() || '#1a1a1a';
         const textColor = themeParams.textColor() || '#ffffff';
         document.documentElement.style.setProperty('--tg-theme-bg-color', bgColor);
         document.documentElement.style.setProperty('--tg-theme-text-color', textColor);
@@ -118,7 +118,7 @@ function App() {
         if (user) {
           telegramUser = {
             id: user.id,
-            username: user.username || user.firstName
+            username: user.username || user.first_name
           };
         }
       } catch (e) {
@@ -231,7 +231,7 @@ function App() {
       mainButton.setParams({
         text: 'HRÁT ZNOVU',
         isVisible: true,
-        backgroundColor: '#2481cc'
+        bgColor: '#2481cc'
       });
 
       const handleClick = () => {
@@ -323,12 +323,6 @@ function App() {
         {value}
       </div>
     );
-  };
-
-  // Calculate grid size
-  const getCellSize = () => {
-    const screenWidth = Math.min(window.innerWidth - 16, 400);
-    return screenWidth / BOARD_SIZE;
   };
 
   // Game status text
