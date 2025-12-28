@@ -301,12 +301,25 @@ function App() {
     }
   }, [isTelegramReady, gameState.status, socket, gameId]);
 
+  // Get telegram user ID
+  const getTelegramId = () => {
+    try {
+      const user = initData.user();
+      return user?.id || null;
+    } catch {
+      return null;
+    }
+  };
+
   // Create new game
   const createGame = async () => {
     setIsCreatingGame(true);
     try {
+      const telegramId = getTelegramId();
       const response = await fetch(`${BACKEND_URL}/api/games`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegramId })
       });
       const data = await response.json();
       setGameId(data.gameId);
@@ -315,6 +328,11 @@ function App() {
       const botUsername = import.meta.env.VITE_BOT_USERNAME || 'YOUR_BOT_USERNAME';
       const link = `https://t.me/${botUsername}?startapp=${data.gameId}`;
       setShareLink(link);
+
+      if (data.existing) {
+        setError('Vráceno do tvého existujícího lobby');
+        setTimeout(() => setError(null), 2000);
+      }
     } catch (e) {
       setError('Nepodařilo se vytvořit hru');
     } finally {

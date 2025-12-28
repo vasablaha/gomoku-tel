@@ -114,6 +114,21 @@ function startTurnTimer(gameId) {
 
 // API endpoint to create a new game
 app.post('/api/games', (req, res) => {
+  const { telegramId } = req.body || {};
+
+  // Check if user already has an active waiting lobby
+  if (telegramId) {
+    for (const [existingGameId, game] of games) {
+      if (game.status === 'waiting' && game.players.length === 1) {
+        const creator = game.players[0];
+        if (creator && creator.visitorId === telegramId) {
+          // Return existing lobby instead of creating new one
+          return res.json({ gameId: existingGameId, existing: true });
+        }
+      }
+    }
+  }
+
   const gameId = crypto.randomBytes(4).toString('hex');
   games.set(gameId, {
     id: gameId,
@@ -122,7 +137,8 @@ app.post('/api/games', (req, res) => {
     currentPlayer: 'X',
     status: 'waiting', // waiting, playing, finished
     winner: null,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    creatorTelegramId: telegramId || null
   });
 
   res.json({ gameId });
@@ -183,14 +199,16 @@ io.on('connection', (socket) => {
     }
 
     // Check if player already in game
-    const existingPlayer = game.players.find(p => p.odI === telegramUser?.id);
+    const visitorId = telegramUser?.id || socket.id;
+    const existingPlayer = game.players.find(p => p.visitorId === visitorId);
     if (existingPlayer) {
       existingPlayer.socketId = socket.id;
       socket.join(gameId);
       socket.emit('gameState', {
         ...game,
         playerSymbol: existingPlayer.symbol,
-        playerCount: game.players.length
+        playerCount: game.players.length,
+        turnStartedAt: game.turnStartedAt
       });
       return;
     }
@@ -201,10 +219,16 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // Prevent playing against yourself
+    if (game.players.length === 1 && game.players[0].visitorId === visitorId) {
+      socket.emit('error', { message: 'Nemůžeš hrát sám proti sobě!' });
+      return;
+    }
+
     const symbol = game.players.length === 0 ? 'X' : 'O';
     const playerName = telegramUser?.username || `Hráč ${symbol}`;
     game.players.push({
-      odI: telegramUser?.id || socket.id,
+      visitorId: visitorId,
       playerName: playerName,
       socketId: socket.id,
       symbol
