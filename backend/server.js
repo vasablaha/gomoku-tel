@@ -94,6 +94,29 @@ app.post('/api/games', (req, res) => {
   res.json({ gameId });
 });
 
+// API endpoint to get all waiting lobbies
+app.get('/api/lobbies', (req, res) => {
+  const now = Date.now();
+  const oneMinute = 60 * 1000;
+  const lobbies = [];
+
+  for (const [gameId, game] of games) {
+    // Only show waiting games less than 1 minute old
+    if (game.status === 'waiting' && game.players.length === 1 && (now - game.createdAt) < oneMinute) {
+      lobbies.push({
+        id: game.id,
+        createdAt: game.createdAt,
+        playerName: game.players[0]?.playerName || 'Hráč'
+      });
+    }
+  }
+
+  // Sort by newest first
+  lobbies.sort((a, b) => b.createdAt - a.createdAt);
+
+  res.json(lobbies);
+});
+
 // API endpoint to get game state
 app.get('/api/games/:gameId', (req, res) => {
   const { gameId } = req.params;
@@ -145,9 +168,10 @@ io.on('connection', (socket) => {
     }
 
     const symbol = game.players.length === 0 ? 'X' : 'O';
+    const playerName = telegramUser?.username || `Hráč ${symbol}`;
     game.players.push({
       odI: telegramUser?.id || socket.id,
-      odIN: telegramUser?.username || `Player ${symbol}`,
+      playerName: playerName,
       socketId: socket.id,
       symbol
     });

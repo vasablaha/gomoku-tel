@@ -24,6 +24,12 @@ interface GameState {
   playerCount: number;
 }
 
+interface Lobby {
+  id: string;
+  createdAt: number;
+  playerName: string;
+}
+
 function App() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [gameId, setGameId] = useState<string | null>(null);
@@ -39,6 +45,7 @@ function App() {
   const [isCreatingGame, setIsCreatingGame] = useState(false);
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [isTelegramReady, setIsTelegramReady] = useState(false);
+  const [lobbies, setLobbies] = useState<Lobby[]>([]);
   const boardRef = useRef<HTMLDivElement>(null);
 
   // Initialize Telegram Mini App
@@ -87,6 +94,26 @@ function App() {
       setGameId(id);
     }
   }, []);
+
+  // Fetch lobbies
+  const fetchLobbies = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/lobbies`);
+      const data = await response.json();
+      setLobbies(data);
+    } catch (e) {
+      console.log('Could not fetch lobbies');
+    }
+  };
+
+  // Fetch lobbies on mount and every 3 seconds
+  useEffect(() => {
+    if (!gameId) {
+      fetchLobbies();
+      const interval = setInterval(fetchLobbies, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [gameId]);
 
   // Connect to socket
   useEffect(() => {
@@ -345,12 +372,25 @@ function App() {
     return 'Soupeř táhne...';
   };
 
+  // Join existing lobby
+  const joinLobby = (lobbyId: string) => {
+    setGameId(lobbyId);
+  };
+
+  // Format time ago
+  const formatTimeAgo = (createdAt: number) => {
+    const seconds = Math.floor((Date.now() - createdAt) / 1000);
+    if (seconds < 10) return 'právě teď';
+    if (seconds < 60) return `před ${seconds}s`;
+    return 'před 1min';
+  };
+
   // Render landing page (no game)
   if (!gameId) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-[var(--tg-theme-bg-color)]">
-        <h1 className="text-3xl font-bold mb-2">🎮 Gomoku</h1>
-        <p className="text-gray-400 mb-8 text-center">Piškvorky 5 v řadě</p>
+      <div className="min-h-screen flex flex-col items-center p-4 bg-[var(--tg-theme-bg-color)]">
+        <h1 className="text-3xl font-bold mb-2 mt-8">🎮 Gomoku</h1>
+        <p className="text-gray-400 mb-6 text-center">Piškvorky 5 v řadě</p>
 
         <button
           onClick={createGame}
@@ -360,11 +400,11 @@ function App() {
             disabled:opacity-50 disabled:cursor-not-allowed
             transition-all duration-150"
         >
-          {isCreatingGame ? 'Vytvářím...' : 'Nová hra'}
+          {isCreatingGame ? 'Vytvářím...' : 'Vytvořit novou hru'}
         </button>
 
         {shareLink && (
-          <div className="mt-8 w-full max-w-xs">
+          <div className="mt-6 w-full max-w-xs">
             <p className="text-sm text-gray-400 mb-2 text-center">Pošli tento odkaz soupeři:</p>
             <div
               onClick={copyShareLink}
@@ -376,6 +416,46 @@ function App() {
             <p className="text-xs text-gray-500 mt-2 text-center">Klikni pro zkopírování</p>
           </div>
         )}
+
+        {/* Lobbies list */}
+        <div className="w-full max-w-xs mt-8">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold">Otevřené hry</h2>
+            <button
+              onClick={fetchLobbies}
+              className="text-xs text-blue-400 hover:text-blue-300"
+            >
+              Obnovit
+            </button>
+          </div>
+
+          {lobbies.length === 0 ? (
+            <p className="text-gray-500 text-sm text-center py-4">
+              Žádné otevřené hry. Vytvoř novou!
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {lobbies.map((lobby) => (
+                <div
+                  key={lobby.id}
+                  onClick={() => joinLobby(lobby.id)}
+                  className="p-3 bg-gray-800 rounded-lg cursor-pointer
+                    hover:bg-gray-700 active:bg-gray-600 transition-colors
+                    flex items-center justify-between"
+                >
+                  <div>
+                    <span className="font-medium">{lobby.playerName}</span>
+                    <span className="text-gray-500 text-sm ml-2">čeká...</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">{formatTimeAgo(lobby.createdAt)}</span>
+                    <span className="text-green-400 text-sm">Připojit →</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {error && (
           <div className="fixed bottom-4 left-4 right-4 p-3 bg-green-600 rounded-lg text-center">
