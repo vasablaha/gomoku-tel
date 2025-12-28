@@ -2,7 +2,7 @@ const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 
 const app = express();
 const httpServer = createServer(app);
@@ -80,7 +80,7 @@ function checkDraw(board) {
 
 // API endpoint to create a new game
 app.post('/api/games', (req, res) => {
-  const gameId = uuidv4().slice(0, 8);
+  const gameId = crypto.randomBytes(4).toString('hex');
   games.set(gameId, {
     id: gameId,
     board: createEmptyBoard(),
