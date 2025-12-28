@@ -144,7 +144,7 @@ function startTurnTimer(gameId) {
 
 // API endpoint to create a new game
 app.post('/api/games', (req, res) => {
-  const { telegramId } = req.body || {};
+  const { telegramId, playerName } = req.body || {};
 
   // Check if user already has an active waiting lobby
   if (telegramId) {
@@ -160,10 +160,17 @@ app.post('/api/games', (req, res) => {
   }
 
   const gameId = crypto.randomBytes(4).toString('hex');
+  const creatorName = playerName || 'Hráč';
+
   games.set(gameId, {
     id: gameId,
     board: createEmptyBoard(),
-    players: [],
+    players: [{
+      visitorId: telegramId || gameId,
+      playerName: creatorName,
+      socketId: null,
+      symbol: 'X'
+    }],
     currentPlayer: 'X',
     status: 'waiting', // waiting, playing, finished
     winner: null,
@@ -235,11 +242,15 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Check if player already in game
+    // Check if player already in game (creator reconnecting)
     const visitorId = telegramUser?.id || socket.id;
-    const existingPlayer = game.players.find(p => p.visitorId === visitorId);
+    const existingPlayer = game.players.find(p => p.visitorId == visitorId || (game.creatorTelegramId && p.visitorId == game.creatorTelegramId && visitorId == game.creatorTelegramId));
     if (existingPlayer) {
       existingPlayer.socketId = socket.id;
+      // Update visitorId if it was placeholder
+      if (telegramUser?.id) {
+        existingPlayer.visitorId = telegramUser.id;
+      }
       socket.join(gameId);
       socket.emit('gameState', {
         ...game,
@@ -257,9 +268,12 @@ io.on('connection', (socket) => {
     }
 
     // Prevent playing against yourself
-    if (game.players.length === 1 && game.players[0].visitorId === visitorId) {
-      socket.emit('error', { message: 'Nemůžeš hrát sám proti sobě!' });
-      return;
+    if (game.players.length === 1) {
+      const creator = game.players[0];
+      if (creator.visitorId == visitorId || (game.creatorTelegramId && game.creatorTelegramId == visitorId)) {
+        socket.emit('error', { message: 'Nemůžeš hrát sám proti sobě!' });
+        return;
+      }
     }
 
     const symbol = game.players.length === 0 ? 'X' : 'O';

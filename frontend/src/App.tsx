@@ -407,15 +407,26 @@ function App() {
     }
   }, [isTelegramReady, gameState.status, socket, gameId]);
 
+  // Get telegram username
+  const getTelegramUsername = useCallback(() => {
+    try {
+      const user = initData.user();
+      return user?.username || user?.first_name || 'Hráč';
+    } catch {
+      return 'Hráč';
+    }
+  }, []);
+
   // Create new game
   const createGame = async () => {
     setIsCreatingGame(true);
     try {
       const telegramId = getTelegramId();
+      const playerName = getTelegramUsername();
       const response = await fetch(`${BACKEND_URL}/api/games`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ telegramId })
+        body: JSON.stringify({ telegramId, playerName })
       });
       const data = await response.json();
       setGameId(data.gameId);
