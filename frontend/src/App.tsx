@@ -431,73 +431,82 @@ function App() {
   if (!gameId) {
     return (
       <div className="min-h-screen flex flex-col items-center p-4 bg-[var(--tg-theme-bg-color)]">
-        <h1 className="text-3xl font-bold mb-2 mt-8">🎮 Gomoku</h1>
-        <p className="text-gray-400 mb-6 text-center">Piškvorky 5 v řadě</p>
+        <h1 className="text-3xl font-bold mb-2 mt-4">🎮 Gomoku</h1>
+        <p className="text-gray-400 mb-4 text-center">Piškvorky 5 v řadě</p>
 
-        <button
-          onClick={createGame}
-          disabled={isCreatingGame}
-          className="w-full max-w-xs py-4 px-6 rounded-xl font-semibold text-lg
-            bg-blue-500 hover:bg-blue-600 active:bg-blue-700
-            disabled:opacity-50 disabled:cursor-not-allowed
-            transition-all duration-150"
-        >
-          {isCreatingGame ? 'Vytvářím...' : 'Vytvořit novou hru'}
-        </button>
-
-        {shareLink && (
-          <div className="mt-6 w-full max-w-xs">
-            <p className="text-sm text-gray-400 mb-2 text-center">Pošli tento odkaz soupeři:</p>
-            <div
-              onClick={copyShareLink}
-              className="p-3 bg-gray-800 rounded-lg text-sm break-all cursor-pointer
-                hover:bg-gray-700 active:bg-gray-600 transition-colors"
-            >
-              {shareLink}
-            </div>
-            <p className="text-xs text-gray-500 mt-2 text-center">Klikni pro zkopírování</p>
-          </div>
-        )}
-
-        {/* Lobbies list */}
-        <div className="w-full max-w-xs mt-8">
+        {/* Lobbies list - PRIMARY */}
+        <div className="w-full max-w-xs">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold">Otevřené hry</h2>
+            <h2 className="text-lg font-semibold">Připojit se ke hře</h2>
             <button
               onClick={fetchLobbies}
               className="text-xs text-blue-400 hover:text-blue-300"
             >
-              Obnovit
+              ↻ Obnovit
             </button>
           </div>
 
           {lobbies.length === 0 ? (
-            <p className="text-gray-500 text-sm text-center py-4">
-              Žádné otevřené hry. Vytvoř novou!
-            </p>
+            <div className="text-center py-6 bg-gray-800/30 rounded-lg">
+              <p className="text-gray-500 text-sm mb-1">Žádné otevřené hry</p>
+              <p className="text-gray-600 text-xs">Vytvoř novou a pozvi kamaráda!</p>
+            </div>
           ) : (
             <div className="space-y-2">
               {lobbies.map((lobby) => (
                 <div
                   key={lobby.id}
                   onClick={() => joinLobby(lobby.id)}
-                  className="p-3 bg-gray-800 rounded-lg cursor-pointer
-                    hover:bg-gray-700 active:bg-gray-600 transition-colors
+                  className="p-4 bg-green-600/20 border border-green-600/30 rounded-lg cursor-pointer
+                    hover:bg-green-600/30 active:bg-green-600/40 transition-colors
                     flex items-center justify-between"
                 >
                   <div>
-                    <span className="font-medium">{lobby.playerName}</span>
-                    <span className="text-gray-500 text-sm ml-2">čeká...</span>
+                    <span className="font-medium text-green-400">{lobby.playerName}</span>
+                    <span className="text-gray-400 text-sm ml-2">čeká na soupeře</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500">{formatTimeAgo(lobby.createdAt)}</span>
-                    <span className="text-green-400 text-sm">Připojit →</span>
+                    <span className="bg-green-500 text-white text-sm px-3 py-1 rounded-full font-medium">Hrát!</span>
                   </div>
                 </div>
               ))}
             </div>
           )}
         </div>
+
+        {/* Divider */}
+        <div className="w-full max-w-xs flex items-center gap-3 my-6">
+          <div className="flex-1 h-px bg-gray-700"></div>
+          <span className="text-gray-500 text-sm">nebo</span>
+          <div className="flex-1 h-px bg-gray-700"></div>
+        </div>
+
+        {/* Create game - SECONDARY */}
+        <button
+          onClick={createGame}
+          disabled={isCreatingGame}
+          className="w-full max-w-xs py-3 px-6 rounded-xl font-semibold
+            bg-gray-700 hover:bg-gray-600 active:bg-gray-500
+            disabled:opacity-50 disabled:cursor-not-allowed
+            transition-all duration-150 border border-gray-600"
+        >
+          {isCreatingGame ? 'Vytvářím...' : '+ Vytvořit novou hru'}
+        </button>
+
+        {shareLink && (
+          <div className="mt-4 w-full max-w-xs">
+            <p className="text-sm text-gray-400 mb-2 text-center">Pošli odkaz kamarádovi:</p>
+            <div
+              onClick={copyShareLink}
+              className="p-3 bg-blue-600/20 border border-blue-600/30 rounded-lg text-sm break-all cursor-pointer
+                hover:bg-blue-600/30 active:bg-blue-600/40 transition-colors text-blue-400"
+            >
+              {shareLink}
+            </div>
+            <p className="text-xs text-gray-500 mt-2 text-center">Klikni pro zkopírování</p>
+          </div>
+        )}
 
         {error && (
           <div className="fixed bottom-4 left-4 right-4 p-3 bg-green-600 rounded-lg text-center">
