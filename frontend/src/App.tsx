@@ -49,7 +49,59 @@ function App() {
   const [lobbies, setLobbies] = useState<Lobby[]>([]);
   const [timeLeft, setTimeLeft] = useState<number>(20);
   const [credits, setCredits] = useState<number>(100);
+  const [creditChange, setCreditChange] = useState<number | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
+
+  // Sound effects
+  const playSound = (type: 'move' | 'win' | 'lose' | 'draw' | 'tick') => {
+    const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    switch (type) {
+      case 'move':
+        oscillator.frequency.value = 600;
+        oscillator.type = 'sine';
+        gainNode.gain.value = 0.1;
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.05);
+        break;
+      case 'win':
+        oscillator.frequency.value = 523;
+        oscillator.type = 'sine';
+        gainNode.gain.value = 0.15;
+        oscillator.start();
+        setTimeout(() => oscillator.frequency.value = 659, 100);
+        setTimeout(() => oscillator.frequency.value = 784, 200);
+        oscillator.stop(audioContext.currentTime + 0.4);
+        break;
+      case 'lose':
+        oscillator.frequency.value = 300;
+        oscillator.type = 'sawtooth';
+        gainNode.gain.value = 0.1;
+        oscillator.start();
+        setTimeout(() => oscillator.frequency.value = 250, 150);
+        oscillator.stop(audioContext.currentTime + 0.3);
+        break;
+      case 'draw':
+        oscillator.frequency.value = 440;
+        oscillator.type = 'triangle';
+        gainNode.gain.value = 0.1;
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.2);
+        break;
+      case 'tick':
+        oscillator.frequency.value = 800;
+        oscillator.type = 'square';
+        gainNode.gain.value = 0.05;
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.02);
+        break;
+    }
+  };
 
   // Initialize Telegram Mini App
   useEffect(() => {
@@ -152,13 +204,19 @@ function App() {
     const updateTimer = () => {
       const elapsed = Math.floor((Date.now() - gameState.turnStartedAt!) / 1000);
       const remaining = Math.max(0, 20 - elapsed);
+
+      // Play tick sound in last 5 seconds
+      if (remaining <= 5 && remaining > 0 && remaining !== timeLeft && gameState.currentPlayer === playerSymbol) {
+        playSound('tick');
+      }
+
       setTimeLeft(remaining);
     };
 
     updateTimer();
     const interval = setInterval(updateTimer, 100);
     return () => clearInterval(interval);
-  }, [gameState.status, gameState.turnStartedAt]);
+  }, [gameState.status, gameState.turnStartedAt, gameState.currentPlayer, playerSymbol, timeLeft]);
 
   // Connect to socket
   useEffect(() => {
@@ -232,6 +290,9 @@ function App() {
         winner: data.winner,
         turnStartedAt: data.turnStartedAt
       }));
+
+      // Play move sound
+      playSound('move');
     });
 
     socket.on('gameOver', ({ winner, board, creditsUpdate }: {
@@ -250,21 +311,29 @@ function App() {
       if (creditsUpdate) {
         const visitorId = getTelegramId();
         if (visitorId && creditsUpdate[visitorId] !== undefined) {
-          setCredits(creditsUpdate[visitorId]);
+          const oldCredits = credits;
+          const newCredits = creditsUpdate[visitorId];
+          setCredits(newCredits);
+
+          // Show credit change animation
+          const change = newCredits - oldCredits;
+          if (change !== 0) {
+            setCreditChange(change);
+            setTimeout(() => setCreditChange(null), 2000);
+          }
         }
       }
 
-      // Haptic feedback for game over
-      try {
-        if (winner === playerSymbol) {
-          hapticFeedback.notificationOccurred('success');
-        } else if (winner === 'draw') {
-          hapticFeedback.notificationOccurred('warning');
-        } else {
-          hapticFeedback.notificationOccurred('error');
-        }
-      } catch (e) {
-        console.log('Haptic feedback not available');
+      // Play sound and haptic feedback for game over
+      if (winner === playerSymbol) {
+        playSound('win');
+        try { hapticFeedback.notificationOccurred('success'); } catch {}
+      } else if (winner === 'draw') {
+        playSound('draw');
+        try { hapticFeedback.notificationOccurred('warning'); } catch {}
+      } else {
+        playSound('lose');
+        try { hapticFeedback.notificationOccurred('error'); } catch {}
       }
     });
 
@@ -563,9 +632,19 @@ function App() {
               {playerSymbol || '?'}
             </span>
           </div>
-          <div className="bg-yellow-500/20 px-2 py-1 rounded-full flex items-center gap-1">
-            <span className="text-yellow-400 text-xs">🪙</span>
-            <span className="font-bold text-yellow-400 text-sm">{credits}</span>
+          <div className="relative">
+            <div className="bg-yellow-500/20 px-2 py-1 rounded-full flex items-center gap-1">
+              <span className="text-yellow-400 text-xs">🪙</span>
+              <span className="font-bold text-yellow-400 text-sm">{credits}</span>
+            </div>
+            {creditChange !== null && (
+              <div
+                className={`absolute -top-2 left-1/2 font-bold text-xl animate-float-up
+                  ${creditChange > 0 ? 'text-green-400' : 'text-red-400'}`}
+              >
+                {creditChange > 0 ? `+${creditChange}` : creditChange}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -575,10 +654,10 @@ function App() {
         text-xl font-bold mb-3 px-4 py-2 rounded-lg flex items-center gap-3
         ${gameState.status === 'finished'
           ? gameState.winner === playerSymbol
-            ? 'bg-green-600/20 text-green-400'
+            ? 'bg-green-600/20 text-green-400 animate-celebrate'
             : gameState.winner === 'draw'
               ? 'bg-yellow-600/20 text-yellow-400'
-              : 'bg-red-600/20 text-red-400'
+              : 'bg-red-600/20 text-red-400 animate-shake'
           : gameState.currentPlayer === playerSymbol
             ? 'bg-blue-600/20 text-blue-400'
             : 'bg-gray-600/20 text-gray-400'
