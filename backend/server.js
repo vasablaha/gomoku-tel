@@ -22,6 +22,7 @@ const games = new Map();
 
 const BOARD_SIZE = 15;
 const WIN_LENGTH = 5;
+const TURN_TIMEOUT = 20000; // 20 seconds per turn
 
 // Create empty board
 function createEmptyBoard() {
@@ -76,6 +77,39 @@ function checkDraw(board) {
     }
   }
   return true;
+}
+
+// Start turn timer
+function startTurnTimer(gameId) {
+  const game = games.get(gameId);
+  if (!game) return;
+
+  // Clear existing timer
+  if (game.turnTimer) {
+    clearTimeout(game.turnTimer);
+  }
+
+  game.turnStartedAt = Date.now();
+
+  game.turnTimer = setTimeout(() => {
+    const g = games.get(gameId);
+    if (!g || g.status !== 'playing') return;
+
+    // Current player loses due to timeout
+    const loser = g.currentPlayer;
+    const winner = loser === 'X' ? 'O' : 'X';
+
+    g.status = 'finished';
+    g.winner = winner;
+
+    io.to(gameId).emit('gameOver', {
+      winner: winner,
+      board: g.board,
+      reason: 'timeout'
+    });
+
+    console.log(`Game ${gameId}: ${loser} lost due to timeout`);
+  }, TURN_TIMEOUT);
 }
 
 // API endpoint to create a new game
@@ -181,6 +215,7 @@ io.on('connection', (socket) => {
     // Start game if 2 players joined
     if (game.players.length === 2) {
       game.status = 'playing';
+      startTurnTimer(gameId);
     }
 
     // Send game state to the joining player
@@ -258,6 +293,7 @@ io.on('connection', (socket) => {
     } else {
       // Switch turn
       game.currentPlayer = game.currentPlayer === 'X' ? 'O' : 'X';
+      startTurnTimer(gameId);
     }
 
     // Broadcast the move to all players
@@ -268,7 +304,8 @@ io.on('connection', (socket) => {
       currentPlayer: game.currentPlayer,
       board: game.board,
       status: game.status,
-      winner: game.winner
+      winner: game.winner,
+      turnStartedAt: game.turnStartedAt
     });
 
     console.log(`Move made in game ${gameId}: ${player.symbol} at (${row}, ${col})`);
@@ -282,17 +319,28 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // Clear existing timer
+    if (game.turnTimer) {
+      clearTimeout(game.turnTimer);
+    }
+
     // Reset the game
     game.board = createEmptyBoard();
     game.currentPlayer = 'X';
     game.status = game.players.length === 2 ? 'playing' : 'waiting';
     game.winner = null;
 
+    // Start timer if game is playing
+    if (game.status === 'playing') {
+      startTurnTimer(gameId);
+    }
+
     // Notify all players
     io.to(gameId).emit('gameRestarted', {
       board: game.board,
       currentPlayer: game.currentPlayer,
-      status: game.status
+      status: game.status,
+      turnStartedAt: game.turnStartedAt
     });
 
     console.log(`Game ${gameId} restarted`);

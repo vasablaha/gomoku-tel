@@ -22,6 +22,7 @@ interface GameState {
   winner: 'X' | 'O' | 'draw' | null;
   playerSymbol?: 'X' | 'O';
   playerCount: number;
+  turnStartedAt?: number;
 }
 
 interface Lobby {
@@ -46,6 +47,7 @@ function App() {
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [isTelegramReady, setIsTelegramReady] = useState(false);
   const [lobbies, setLobbies] = useState<Lobby[]>([]);
+  const [timeLeft, setTimeLeft] = useState<number>(20);
   const boardRef = useRef<HTMLDivElement>(null);
 
   // Initialize Telegram Mini App
@@ -115,6 +117,24 @@ function App() {
     }
   }, [gameId]);
 
+  // Turn timer countdown
+  useEffect(() => {
+    if (gameState.status !== 'playing' || !gameState.turnStartedAt) {
+      setTimeLeft(20);
+      return;
+    }
+
+    const updateTimer = () => {
+      const elapsed = Math.floor((Date.now() - gameState.turnStartedAt!) / 1000);
+      const remaining = Math.max(0, 20 - elapsed);
+      setTimeLeft(remaining);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 100);
+    return () => clearInterval(interval);
+  }, [gameState.status, gameState.turnStartedAt]);
+
   // Connect to socket
   useEffect(() => {
     const newSocket = io(BACKEND_URL, {
@@ -177,13 +197,15 @@ function App() {
       board: CellValue[][];
       status: GameStatus;
       winner: 'X' | 'O' | 'draw' | null;
+      turnStartedAt?: number;
     }) => {
       setGameState(prev => ({
         ...prev,
         board: data.board,
         currentPlayer: data.currentPlayer,
         status: data.status,
-        winner: data.winner
+        winner: data.winner,
+        turnStartedAt: data.turnStartedAt
       }));
     });
 
@@ -209,17 +231,19 @@ function App() {
       }
     });
 
-    socket.on('gameRestarted', ({ board, currentPlayer, status }: {
+    socket.on('gameRestarted', ({ board, currentPlayer, status, turnStartedAt }: {
       board: CellValue[][];
       currentPlayer: 'X' | 'O';
       status: GameStatus;
+      turnStartedAt?: number;
     }) => {
       setGameState(prev => ({
         ...prev,
         board,
         currentPlayer,
         status,
-        winner: null
+        winner: null,
+        turnStartedAt
       }));
     });
 
@@ -485,7 +509,7 @@ function App() {
 
       {/* Status */}
       <div className={`
-        text-xl font-bold mb-3 px-4 py-2 rounded-lg
+        text-xl font-bold mb-3 px-4 py-2 rounded-lg flex items-center gap-3
         ${gameState.status === 'finished'
           ? gameState.winner === playerSymbol
             ? 'bg-green-600/20 text-green-400'
@@ -498,6 +522,14 @@ function App() {
         }
       `}>
         {getStatusText()}
+        {gameState.status === 'playing' && (
+          <span className={`
+            text-lg font-mono px-2 py-1 rounded
+            ${timeLeft <= 5 ? 'bg-red-600/30 text-red-400 animate-pulse' : 'bg-gray-700/50'}
+          `}>
+            {timeLeft}s
+          </span>
+        )}
       </div>
 
       {/* Board */}
